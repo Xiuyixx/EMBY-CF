@@ -2,6 +2,7 @@ const UPSTREAMS_KEY = 'upstreams';
 const HEALTH_KEY = 'upstream_health';
 const ADMIN_TOKEN_KEY = 'admin_token';
 const SETUP_DONE_KEY = 'setup_done';
+const PREFERRED_IPS_KEY = 'preferred_ips';
 
 function parseJson(text, fallback) {
   if (!text) {
@@ -124,6 +125,40 @@ export async function isSetupDone(env) {
 
   // 内存模式：检查内存中的 setupDone 标记
   return getMemoryState(env).setupDone === true;
+}
+
+/**
+ * 获取优选 IP 列表（先读 KV/内存，再回落环境变量）
+ * @returns {string[]} IP/代理地址数组
+ */
+export async function getPreferredIPs(env) {
+  if (hasKV(env)) {
+    const raw = await env.KV.get(PREFERRED_IPS_KEY);
+    if (raw !== null) {
+      const list = parseJson(raw, []);
+      return Array.isArray(list) ? list : [];
+    }
+  } else {
+    const mem = getMemoryState(env);
+    if (Array.isArray(mem.preferredIPs)) return mem.preferredIPs;
+  }
+  // 回落环境变量
+  const envVal = String(env.PREFERRED_IP || '').trim();
+  return envVal ? envVal.split(',').map(s => s.trim()).filter(Boolean) : [];
+}
+
+/**
+ * 保存优选 IP 列表
+ * @param {object} env
+ * @param {string[]} list
+ */
+export async function setPreferredIPs(env, list) {
+  const safe = (Array.isArray(list) ? list : []).map(s => String(s).trim()).filter(Boolean);
+  if (hasKV(env)) {
+    await env.KV.put(PREFERRED_IPS_KEY, JSON.stringify(safe));
+  } else {
+    getMemoryState(env).preferredIPs = safe;
+  }
 }
 
 export async function completeSetup(env, token) {

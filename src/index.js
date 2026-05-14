@@ -2,10 +2,12 @@ import { getAdminHTML } from './admin-ui.js';
 import {
   completeSetup,
   getHealth,
+  getPreferredIPs,
   getStoredAdminToken,
   getUpstreams,
   hasKV,
   isSetupDone,
+  setPreferredIPs,
   setUpstreams
 } from './config.js';
 import { handleProxyRequest } from './proxy.js';
@@ -70,6 +72,11 @@ function isValidUpstreamEntry(entry) {
   } catch {
     return false;
   }
+}
+
+function isValidPreferredIPEntry(entry) {
+  const value = String(entry || '').trim();
+  return Boolean(value) && !/[\s/]/.test(value) && !value.includes('://');
 }
 
 function checkStartupSecurity(env) {
@@ -147,8 +154,39 @@ async function handleAdmin(request, env) {
   }
 
   if (request.method === 'GET' && url.pathname === '/_admin/status') {
-    const [upstreams, health] = await Promise.all([getUpstreams(env), getHealth(env)]);
-    return json({ upstreams, health, hasKV: hasKV(env), now: new Date().toISOString() });
+    const [upstreams, health, preferredIPs] = await Promise.all([
+      getUpstreams(env),
+      getHealth(env),
+      getPreferredIPs(env)
+    ]);
+    return json({ upstreams, health, preferredIPs, hasKV: hasKV(env), now: new Date().toISOString() });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/_admin/preferred-ips') {
+    const preferredIPs = await getPreferredIPs(env);
+    return json({ preferredIPs, hasKV: hasKV(env) });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/_admin/preferred-ips') {
+    let payload;
+
+    try {
+      payload = await request.json();
+    } catch {
+      return json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    if (!Array.isArray(payload?.preferredIPs)) {
+      return json({ error: 'Body must include a preferredIPs array' }, 400);
+    }
+
+    if (!payload.preferredIPs.every(isValidPreferredIPEntry)) {
+      return json({ error: 'Preferred IP must be IP/domain/proxy[:port], without protocol or path' }, 400);
+    }
+
+    await setPreferredIPs(env, payload.preferredIPs);
+    const preferredIPs = await getPreferredIPs(env);
+    return json({ ok: true, preferredIPs });
   }
 
   if (request.method === 'POST' && url.pathname === '/_admin/trigger-health') {

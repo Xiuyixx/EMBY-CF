@@ -1,5 +1,5 @@
 import { chooseUpstreams } from './upstream.js';
-import { pickPreferredIP, applyPreferredIP, isPreferredIPEnabled } from './preferred-ip.js';
+import { pickPreferredIP, applyPreferredIP } from './preferred-ip.js';
 
 const HOP_BY_HOP_HEADERS = [
   'connection',
@@ -94,8 +94,8 @@ async function fetchUpstream(request, upstream, init, timeoutMs, env) {
   let targetUrl = createTargetUrl(request, upstream).toString();
 
   // 优选 IP：把目标 URL 的 hostname 替换为优选 IP，Host header 已在 init 里设好
-  if (env && isPreferredIPEnabled(env)) {
-    const ip = pickPreferredIP(env);
+  if (env) {
+    const ip = await pickPreferredIP(env);
     if (ip) {
       const { url } = applyPreferredIP(targetUrl, ip);
       targetUrl = url;
@@ -167,12 +167,10 @@ async function handleMediaProxyRequest(request, env, orderedUpstreams) {
 
   // 计算优选 IP 改写，Host header 要保持原始域名
   let overrideHost = null;
-  if (isPreferredIPEnabled(env)) {
-    const ip = pickPreferredIP(env);
-    if (ip) {
-      const { originalHost } = applyPreferredIP(createTargetUrl(request, upstream).toString(), ip);
-      overrideHost = originalHost;
-    }
+  const preferredIp = await pickPreferredIP(env);
+  if (preferredIp) {
+    const { originalHost } = applyPreferredIP(createTargetUrl(request, upstream).toString(), preferredIp);
+    overrideHost = originalHost;
   }
 
   const init = createProxyInit(request, upstream, null, 'follow', true, overrideHost);
@@ -199,12 +197,10 @@ async function handleApiProxyRequest(request, env, orderedUpstreams) {
     try {
       // 计算优选 IP 改写
       let overrideHost = null;
-      if (isPreferredIPEnabled(env)) {
-        const ip = pickPreferredIP(env);
-        if (ip) {
-          const { originalHost } = applyPreferredIP(createTargetUrl(request, upstream).toString(), ip);
-          overrideHost = originalHost;
-        }
+      const preferredIp = await pickPreferredIP(env);
+      if (preferredIp) {
+        const { originalHost } = applyPreferredIP(createTargetUrl(request, upstream).toString(), preferredIp);
+        overrideHost = originalHost;
       }
 
       const init = createProxyInit(request, upstream, bodyBuffer, 'follow', false, overrideHost);

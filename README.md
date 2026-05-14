@@ -148,9 +148,27 @@ https://你的Worker地址/_admin
 
 ### 配置方法
 
-得到优选 IP 后，有两种配置方式：
+得到优选 IP 后，有三种配置方式：
 
-**方式一：Cloudflare Dashboard 配置（推荐）**
+**方式一：管理面板配置（推荐）**
+
+1. 打开 `https://你的Worker地址/_admin`
+2. 登录管理面板
+3. 在首页找到 **「优选 IP / 优选代理」** 配置框
+4. 每行填写一个优选 IP、IP:端口或代理域名
+5. 点击 **「保存优选 IP」**
+
+示例：
+```text
+104.16.0.1
+104.17.0.1
+162.159.128.1
+proxy.example.com:443
+```
+
+保存后立即生效。绑定 KV 时会持久保存；未绑定 KV 时只在当前 Worker 内存中临时生效，Worker 重启后会丢失。
+
+**方式二：Cloudflare Dashboard 配置**
 
 1. Cloudflare Dashboard → Workers & Pages → 你的 Worker
 2. 点击 **Settings** → **Variables and Secrets**
@@ -174,7 +192,7 @@ https://你的Worker地址/_admin
 proxy.example.com
 ```
 
-**方式二：wrangler.toml 配置**
+**方式三：wrangler.toml 配置**
 
 取注释 `wrangler.toml` 里的 `PREFERRED_IP` 行：
 ```toml

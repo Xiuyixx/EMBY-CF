@@ -74,6 +74,11 @@ export function getAdminHTML() {
     .empty-state{padding:48px 20px;text-align:center;color:var(--muted)}
     .pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
     .pagination-controls{display:flex;gap:8px}
+    .settings-card{border:1px solid var(--border);border-radius:16px;background:#181818;padding:16px;margin-bottom:18px}
+    .settings-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+    .settings-title{font-size:16px;font-weight:700}
+    .settings-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .settings-hint{color:var(--muted);font-size:12px;margin-top:8px}
     .footer{padding:16px 24px 24px;text-align:center;color:var(--muted);font-size:12px}
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.52);display:grid;place-items:center;padding:24px;z-index:30}
     .modal-card{width:min(100%,460px);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:24px}
@@ -171,6 +176,21 @@ export function getAdminHTML() {
           <button class="primary" onclick="openAddModal()">＋ 添加上游</button>
         </div>
       </div>
+      <div class="settings-card">
+        <div class="settings-head">
+          <div>
+            <div class="settings-title">优选 IP / 优选代理</div>
+            <div class="muted">可选。每行一个 IP、IP:端口或代理域名；留空则不启用。</div>
+          </div>
+          <div class="settings-actions">
+            <span id="preferredIpStatus" class="tag">未启用</span>
+            <button class="primary" id="preferredIpSaveBtn" onclick="savePreferredIPs()">保存优选 IP</button>
+          </div>
+        </div>
+        <textarea id="preferredIpInput" rows="3" placeholder="104.16.0.1&#10;104.17.0.1&#10;proxy.example.com:443"></textarea>
+        <div class="settings-hint">说明：Worker 会把上游请求改写到这里填写的优选 IP/代理，但 Host 仍保持你的 Emby 上游域名。多个地址会随机选一个。</div>
+        <div class="error-msg" id="preferredIpErr"></div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>URL</th><th>备注</th><th>状态</th><th>延迟</th><th>版本</th><th>检查方式</th><th>最后检查</th><th class="text-right">操作</th></tr></thead>
@@ -208,6 +228,7 @@ export function getAdminHTML() {
 let TOKEN = '';
 let allUpstreams = [];
 let allHealth = [];
+let allPreferredIPs = [];
 let page = 1;
 const PAGE_SIZE = 10;
 let editingIndex = -1;
@@ -300,11 +321,13 @@ async function loadStatus() {
 async function applyStatus(data) {
   allUpstreams = data.upstreams || [];
   allHealth = data.health || [];
+  allPreferredIPs = data.preferredIPs || [];
   const kvTag = document.getElementById('kvTag');
   if (Boolean(data.hasKV)) { kvTag.textContent = 'KV ✓'; kvTag.className = 'tag ok'; }
   else { kvTag.textContent = '⚠️ 内存模式（重启丢失）'; kvTag.className = 'tag warn'; }
   document.getElementById('timeTag').textContent = new Date(data.now || Date.now()).toLocaleTimeString('zh-CN');
   document.getElementById('nowLabel').textContent = '当前时间 ' + new Date().toLocaleString('zh-CN');
+  renderPreferredIPs();
   renderSidebar();
   renderTable();
 }
@@ -321,6 +344,55 @@ async function triggerHealth() {
   allHealth = data.health || [];
   renderSidebar();
   renderTable();
+}
+
+function renderPreferredIPs() {
+  const input = document.getElementById('preferredIpInput');
+  const status = document.getElementById('preferredIpStatus');
+  if (!input || !status) return;
+  input.value = allPreferredIPs.join('\\n');
+  if (allPreferredIPs.length > 0) {
+    status.textContent = '已启用 ' + allPreferredIPs.length + ' 个';
+    status.className = 'tag ok';
+  } else {
+    status.textContent = '未启用';
+    status.className = 'tag';
+  }
+}
+
+function parsePreferredIPs() {
+  return (document.getElementById('preferredIpInput').value || '')
+    .split('\\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function isValidPreferredIP(value) {
+  return Boolean(value) && !/[\\s/]/.test(value) && !value.includes('://');
+}
+
+async function savePreferredIPs() {
+  const btn = document.getElementById('preferredIpSaveBtn');
+  const err = document.getElementById('preferredIpErr');
+  const preferredIPs = parsePreferredIPs();
+  const invalid = preferredIPs.find(v => !isValidPreferredIP(v));
+  if (invalid) { err.textContent = '格式错误：' + invalid + '。请填写 IP、IP:端口或代理域名，不要带 http:// 或路径。'; return; }
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  err.textContent = '';
+  const res = await authFetch('/_admin/preferred-ips', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ preferredIPs })
+  });
+  btn.disabled = false;
+  btn.textContent = '保存优选 IP';
+  if (!res) { err.textContent = '请求失败'; return; }
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || '保存失败'; return; }
+  allPreferredIPs = data.preferredIPs || [];
+  renderPreferredIPs();
+  err.textContent = allPreferredIPs.length > 0 ? '已保存，后续请求会自动使用优选 IP。' : '已清空，优选 IP 已关闭。';
 }
 
 function getHealthRecord(url) {
