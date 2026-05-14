@@ -58,7 +58,8 @@ export async function runHealthChecks(env) {
   }
 
   const results = await Promise.all(
-    upstreams.map(async (upstreamUrl) => {
+    upstreams.map(async (entry) => {
+      const upstreamUrl = typeof entry === 'object' ? entry.url : entry;
       const startedAt = Date.now();
 
       try {
@@ -102,13 +103,17 @@ export async function chooseUpstreams(env) {
     throw new Error('No upstreams configured');
   }
 
-  const knownHealthCount = upstreams.filter((url) => healthMap.has(url)).length;
+  const knownHealthCount = upstreams.filter((entry) => {
+    const url = typeof entry === 'object' ? entry.url : entry;
+    return healthMap.has(url);
+  }).length;
   if (knownHealthCount === 0) {
-    return upstreams;
+    return upstreams.map((e) => typeof e === 'object' ? e.url : e);
   }
 
   const ranked = upstreams
-    .map((url, index) => {
+    .map((entry, index) => {
+      const url = typeof entry === 'object' ? entry.url : entry;
       const item = healthMap.get(url);
       return {
         url,

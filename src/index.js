@@ -143,6 +143,12 @@ async function handleAdmin(request, env) {
     if (!Array.isArray(payload?.upstreams) || payload.upstreams.length === 0) {
       return json({ error: 'Body must include a non-empty upstreams array' }, 400);
     }
+    // 兼容纯 URL 字符串和 {url, note} 对象两种格式
+    const hasValid = payload.upstreams.some(u => {
+      const url = typeof u === 'object' ? u?.url : u;
+      return url && String(url).startsWith('http');
+    });
+    if (!hasValid) return json({ error: 'At least one valid upstream URL (http/https) is required' }, 400);
 
     await setUpstreams(env, payload.upstreams);
     const upstreams = await getUpstreams(env);

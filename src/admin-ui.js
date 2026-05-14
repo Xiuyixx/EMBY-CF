@@ -179,14 +179,14 @@ export function getAdminHTML() {
         </div>
         <div class="toolbar-right">
           <div class="search-wrap"><input id="searchInput" type="search" placeholder="搜索 URL..." oninput="renderTable()"/></div>
-          <button onclick="loadStatus()">↻ 刷新</button>
+          <button id="refreshBtn" onclick="doRefresh(this)">↻ 刷新</button>
           <button class="success" id="healthBtn" onclick="triggerHealth()">⚡ 立即健康检查</button>
           <button class="primary" onclick="openAddModal()">＋ 添加上游</button>
         </div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>URL</th><th>状态</th><th>延迟</th><th>最后检查</th><th class="text-right">操作</th></tr></thead>
+          <thead><tr><th>URL</th><th>备注</th><th>状态</th><th>延迟</th><th>最后检查</th><th class="text-right">操作</th></tr></thead>
           <tbody id="tableBody"></tbody>
         </table>
         <div id="emptyState" class="empty-state hidden">暂无上游，点击「添加上游」开始配置。</div>
@@ -203,21 +203,22 @@ export function getAdminHTML() {
   <footer class="footer">Nginx-CF v1.1.0 · <span id="nowLabel"></span></footer>
 </section>
 
-<!-- ══════════════ MODAL ══════════════ -->
-<div id="modal" class="modal hidden">
-  <div class="modal-card">
-    <div class="modal-header">
-      <div class="modal-title" id="modalTitle">添加上游</div>
-      <button onclick="closeModal()">✕</button>
-    </div>
-    <div class="field"><label>上游地址</label><input id="modalUrl" type="url" placeholder="https://your-server.example.com"/></div>
-    <div class="error-msg" id="modalErr"></div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button style="flex:1" onclick="closeModal()">取消</button>
-      <button class="primary" style="flex:2" onclick="submitModal()">确认</button>
+  <!-- Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">添加上游</div>
+        <button onclick="closeModal()">✕</button>
+      </div>
+      <div class="field"><label>URL 地址</label><input id="modalUrl" type="url" placeholder="https://your-server.example.com"/></div>
+      <div class="field"><label>备注（可选）</label><input id="modalNote" type="text" placeholder="例如：主站点 / 备用节点"/></div>
+      <div class="error-msg" id="modalErr"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button style="flex:1" onclick="closeModal()">取消</button>
+        <button class="primary" style="flex:2" onclick="submitModal()">确认</button>
+      </div>
     </div>
   </div>
-</div>
 
 <script>
 // ── State ──
@@ -306,6 +307,11 @@ document.addEventListener('keydown', e => {
 function doLogout() { TOKEN = ''; sessionStorage.removeItem('ngx_token'); show('loginView'); }
 
 // ── App ──
+async function doRefresh(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '刷新中…'; }
+  await loadStatus();
+  if (btn) { btn.disabled = false; btn.textContent = '↻ 刷新'; }
+}
 async function loadStatus() {
   const res = await authFetch('/_admin/status');
   if (!res) return;
@@ -342,15 +348,22 @@ function getHealthRecord(url) {
   return allHealth.find(h => h.url === url) || null;
 }
 
+function getEntry(i) {
+  const e = allUpstreams[i];
+  return typeof e === 'object' ? e : { url: e, note: '' };
+}
+
 function renderSidebar() {
   const list = document.getElementById('sidebarList');
   document.getElementById('sidebarCount').textContent = allUpstreams.length;
-  list.innerHTML = allUpstreams.map((url, i) => {
+  list.innerHTML = allUpstreams.map((entry, i) => {
+    const { url, note } = typeof entry === 'object' ? entry : { url: entry, note: '' };
     const h = getHealthRecord(url);
     const healthy = h?.healthy;
     const latency = h ? (h.latency >= 0 ? h.latency + 'ms' : '超时') : '未知';
+    const label = note || url;
     return \`<div class="sidebar-item" onclick="highlightRow(\${i})">
-      <div class="sidebar-item-row"><span class="dot \${healthy ? 'healthy' : ''}"></span><span class="truncate" title="\${url}">\${url}</span></div>
+      <div class="sidebar-item-row"><span class="dot \${healthy ? 'healthy' : ''}"></span><span class="truncate" title="\${url}">\${label}</span></div>
       <div class="sidebar-meta">\${healthy === undefined ? '暂无数据' : (healthy ? '健康' : '不健康')} · \${latency}</div>
     </div>\`;
   }).join('');
@@ -358,7 +371,10 @@ function renderSidebar() {
 
 function renderTable() {
   const q = (document.getElementById('searchInput').value || '').toLowerCase();
-  const filtered = allUpstreams.map((url, i) => ({ url, i })).filter(({ url }) => url.toLowerCase().includes(q));
+  const filtered = allUpstreams.map((entry, i) => {
+    const { url, note } = typeof entry === 'object' ? entry : { url: entry, note: '' };
+    return { url, note, i };
+  }).filter(({ url, note }) => url.toLowerCase().includes(q) || note.toLowerCase().includes(q));
   const total = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   page = Math.min(page, total);
   const slice = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -367,18 +383,19 @@ function renderTable() {
   if (slice.length === 0) { tbody.innerHTML = ''; empty.classList.remove('hidden'); }
   else {
     empty.classList.add('hidden');
-    tbody.innerHTML = slice.map(({ url, i }) => {
+    tbody.innerHTML = slice.map(({ url, note, i }) => {
       const h = getHealthRecord(url);
       const healthy = h?.healthy;
       const latency = h ? (h.latency >= 0 ? h.latency + 'ms' : '超时') : '—';
       const lastCheck = h?.lastCheck ? new Date(h.lastCheck).toLocaleString('zh-CN') : '—';
       const badge = healthy === undefined ? '' : \`<span class="badge \${healthy ? 'healthy' : 'unhealthy'}">\${healthy ? '✓ 健康' : '✗ 不健康'}</span>\`;
       return \`<tr id="row-\${i}">
-        <td class="truncate" style="max-width:260px" title="\${url}">\${url}</td>
+        <td class="truncate" style="max-width:200px" title="\${url}">\${url}</td>
+        <td class="muted truncate" style="max-width:100px" title="\${note}">\${note || '—'}</td>
         <td>\${badge || '<span class="muted">—</span>'}</td>
         <td>\${latency}</td>
         <td>\${lastCheck}</td>
-        <td class="text-right"><button onclick="openEditModal(\${i})">编辑</button> <button class="danger" onclick="removeUpstream(\${i})">删除</button></td>
+        <td class="text-right" style="white-space:nowrap"><button onclick="openEditModal(\${i})">编辑</button> <button class="danger" onclick="removeUpstream(\${i})">删除</button></td>
       </tr>\`;
     }).join('');
   }
@@ -395,17 +412,33 @@ function highlightRow(i) {
 function changePage(d) { page += d; renderTable(); }
 
 // ── Modal ──
-function openAddModal() { editingIndex = -1; document.getElementById('modalTitle').textContent = '添加上游'; document.getElementById('modalUrl').value = ''; document.getElementById('modalErr').textContent = ''; document.getElementById('modal').classList.remove('hidden'); }
-function openEditModal(i) { editingIndex = i; document.getElementById('modalTitle').textContent = '编辑上游'; document.getElementById('modalUrl').value = allUpstreams[i] || ''; document.getElementById('modalErr').textContent = ''; document.getElementById('modal').classList.remove('hidden'); }
+function openAddModal() {
+  editingIndex = -1;
+  document.getElementById('modalTitle').textContent = '添加上游';
+  document.getElementById('modalUrl').value = '';
+  document.getElementById('modalNote').value = '';
+  document.getElementById('modalErr').textContent = '';
+  document.getElementById('modal').classList.remove('hidden');
+}
+function openEditModal(i) {
+  editingIndex = i;
+  const { url, note } = getEntry(i);
+  document.getElementById('modalTitle').textContent = '编辑上游';
+  document.getElementById('modalUrl').value = url;
+  document.getElementById('modalNote').value = note || '';
+  document.getElementById('modalErr').textContent = '';
+  document.getElementById('modal').classList.remove('hidden');
+}
 function closeModal() { document.getElementById('modal').classList.add('hidden'); }
 
 async function submitModal() {
   const url = document.getElementById('modalUrl').value.trim();
+  const note = document.getElementById('modalNote').value.trim();
   const err = document.getElementById('modalErr');
   if (!url || !url.startsWith('http')) { err.textContent = '请输入有效的 URL（以 http:// 或 https:// 开头）'; return; }
-  let list = [...allUpstreams];
-  if (editingIndex >= 0) list[editingIndex] = url;
-  else list.push(url);
+  let list = allUpstreams.map(e => typeof e === 'object' ? e : { url: e, note: '' });
+  if (editingIndex >= 0) list[editingIndex] = { url, note };
+  else list.push({ url, note });
   err.textContent = '保存中…';
   const res = await authFetch('/_admin/upstreams', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ upstreams: list }) });
   if (!res) { err.textContent = '请求失败'; return; }
@@ -418,7 +451,8 @@ async function submitModal() {
 }
 
 async function removeUpstream(i) {
-  if (!confirm('确定删除该上游？')) return;
+  const { url, note } = getEntry(i);
+  if (!confirm(\`确定删除该上游？\n\${note ? note + '  ' : ''}\${url}\`)) return;
   const list = allUpstreams.filter((_, idx) => idx !== i);
   const res = await authFetch('/_admin/upstreams', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ upstreams: list }) });
   if (!res) return;
