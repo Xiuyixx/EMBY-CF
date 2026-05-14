@@ -1,3 +1,4 @@
+import { getAdminHTML } from './admin-ui.js';
 import { getHealth, getUpstreams, setUpstreams } from './config.js';
 import { handleProxyRequest } from './proxy.js';
 import { runHealthChecks } from './upstream.js';
@@ -17,11 +18,19 @@ function isAuthorized(request, env) {
 }
 
 async function handleAdmin(request, env) {
+  const url = new URL(request.url);
+
+  if (request.method === 'GET' && (url.pathname === '/_admin' || url.pathname === '/_admin/')) {
+    return new Response(getAdminHTML(), {
+      headers: {
+        'content-type': 'text/html; charset=utf-8'
+      }
+    });
+  }
+
   if (!isAuthorized(request, env)) {
     return json({ error: 'Unauthorized' }, 401);
   }
-
-  const url = new URL(request.url);
 
   if (request.method === 'GET' && url.pathname === '/_admin/status') {
     const [upstreams, health] = await Promise.all([getUpstreams(env), getHealth(env)]);
@@ -53,7 +62,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    if (url.pathname.startsWith('/_admin/')) {
+    if (url.pathname === '/_admin' || url.pathname.startsWith('/_admin/')) {
       return handleAdmin(request, env, ctx);
     }
 
