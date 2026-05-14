@@ -65,6 +65,11 @@ async function isAuthorized(request, env) {
 
 function isValidUpstreamEntry(entry) {
   const value = typeof entry === 'object' ? entry?.url : entry;
+  const type = typeof entry === 'object' ? entry?.type : 'backend';
+
+  if (type !== undefined && type !== 'backend' && type !== 'frontend') {
+    return false;
+  }
 
   try {
     const url = new URL(String(value || '').trim());

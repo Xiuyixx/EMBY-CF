@@ -256,7 +256,7 @@ async function handleApiProxyRequest(request, env, orderedUpstreams) {
 }
 
 export async function handleProxyRequest(request, env, route) {
-  const orderedUpstreams = await chooseUpstreams(env);
+  const orderedUpstreams = await chooseUpstreams(env, route?.upstreamType || 'backend');
 
   if (route?.type === 'media') {
     return handleMediaProxyRequest(request, env, orderedUpstreams);
