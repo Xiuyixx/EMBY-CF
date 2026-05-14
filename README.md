@@ -118,6 +118,82 @@ https://你的Worker地址/_admin
 | `ADMIN_TOKEN` | — | 管理面板密码；设置后可跳过初始化向导 |
 | `REQUEST_TIMEOUT_MS` | `10000` | API/普通请求超时，单位毫秒 |
 | `HEALTH_TIMEOUT_MS` | `5000` | 健康检查超时，单位毫秒 |
+| `PREFERRED_IP` | — | 优选 IP / 优选代理，详见下方说明 |
+
+## 优选 IP 使用说明
+
+### 什么是优选 IP？
+
+当你的 Emby 上游域名解析到 Cloudflare 节点时（即你的 Emby 开了 Cloudflare 代理），Cloudflare 全球有很多节点，不同节点对你的延迟差异很大。「优选 IP」就是用工具测出延迟最低的 Cloudflare 节点 IP，让请求强制走这个最快的 IP。
+
+### 如何获取优选 IP
+
+**工具推荐：**
+- [CloudflareSpeedTest](https://github.com/XIU2/CloudflareSpeedTest)（最常用，开源）
+- [CF-Workers-SpeedTest](https://github.com/cmliu/CF-Workers-SpeedTest)（在线测速版）
+
+**步骤：**
+
+1. 下载 [CloudflareSpeedTest](https://github.com/XIU2/CloudflareSpeedTest/releases) 对应你系统的版本
+2. 运行测速：
+   ```bash
+   # Windows
+   CloudflareST.exe
+
+   # Linux / macOS
+   ./CloudflareST
+   ```
+3. 程序会自动测试大量 CF IP，最终输出延迟最低的一组 IP
+4. 取前 1–5 个延迟最低的 IP 备用
+
+### 配置方法
+
+得到优选 IP 后，有两种配置方式：
+
+**方式一：Cloudflare Dashboard 配置（推荐）**
+
+1. Cloudflare Dashboard → Workers & Pages → 你的 Worker
+2. 点击 **Settings** → **Variables and Secrets**
+3. 点击 **Add** ，添加环境变量：
+   - **Variable name**: `PREFERRED_IP`
+   - **Value**: 优选 IP 地址，多个用英文逗号分隔
+4. 点击 **Save and deploy**
+
+**示例内容：**
+```
+# 单个 IP
+104.16.0.1
+
+# 多个 IP，Worker 每次请求随机选一个
+104.16.0.1,104.17.0.1,162.159.128.1
+
+# 带端口（HTTPS 非标准端口时用）
+104.16.0.1:8443
+
+# 代理域名（中转代理）
+proxy.example.com
+```
+
+**方式二：wrangler.toml 配置**
+
+取注释 `wrangler.toml` 里的 `PREFERRED_IP` 行：
+```toml
+[vars]
+PREFERRED_IP = "104.16.0.1,104.17.0.1"
+```
+
+### 与优选代理配合使用
+
+如果你使用的是中转代理地址（而不是直接的 CF IP），同样填入 `PREFERRED_IP` 即可：
+```
+PREFERRED_IP = "你的代理地址:端口"
+```
+
+### 注意事项
+
+- 优选 IP 适用于上游域名在 Cloudflare 上的场景，如果你的 Emby 是直连服务器 IP（没有过 CF）则不需要配置
+- 多个 IP 是随机选一，如需固定用某个可设置 `CF_IP_INDEX`（从 0 开始）
+- 优选 IP 默认不启用，不配置 `PREFERRED_IP` 就不会影响任何请求
 
 ## 健康检查逻辑
 

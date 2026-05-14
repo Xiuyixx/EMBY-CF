@@ -1,4 +1,5 @@
 import { chooseUpstreams } from './upstream.js';
+import { pickPreferredIP, applyPreferredIP, isPreferredIPEnabled } from './preferred-ip.js';
 
 const HOP_BY_HOP_HEADERS = [
   'connection',
@@ -34,12 +35,13 @@ function copyHeaders(headers, blocked = []) {
   return output;
 }
 
-function buildForwardedHeaders(request, upstream) {
+function buildForwardedHeaders(request, upstream, overrideHost = null) {
   const headers = copyHeaders(request.headers, HOP_BY_HOP_HEADERS);
   const clientUrl = new URL(request.url);
   const upstreamUrl = new URL(upstream);
 
-  headers.set('Host', upstreamUrl.host);
+  // 如果使用了优选 IP，Host 必须保持原始域名，否则上游无法识别
+  headers.set('Host', overrideHost || upstreamUrl.host);
   headers.set('X-Forwarded-Host', clientUrl.host);
   headers.set('X-Forwarded-Proto', clientUrl.protocol.replace(':', ''));
   headers.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') || '0.0.0.0');
@@ -88,8 +90,18 @@ function cloneRequestBody(bodyBuffer) {
   return bodyBuffer ? bodyBuffer.slice(0) : undefined;
 }
 
-async function fetchUpstream(request, upstream, init, timeoutMs) {
-  const targetUrl = createTargetUrl(request, upstream).toString();
+async function fetchUpstream(request, upstream, init, timeoutMs, env) {
+  let targetUrl = createTargetUrl(request, upstream).toString();
+
+  // 优选 IP：把目标 URL 的 hostname 替换为优选 IP，Host header 已在 init 里设好
+  if (env && isPreferredIPEnabled(env)) {
+    const ip = pickPreferredIP(env);
+    if (ip) {
+      const { url } = applyPreferredIP(targetUrl, ip);
+      targetUrl = url;
+    }
+  }
+
   const responsePromise = fetch(targetUrl, init);
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
@@ -99,10 +111,10 @@ async function fetchUpstream(request, upstream, init, timeoutMs) {
   return withTimeout(responsePromise, timeoutMs);
 }
 
-function createProxyInit(request, upstream, bodyBuffer, redirectMode, allowStreamingBody = false) {
+function createProxyInit(request, upstream, bodyBuffer, redirectMode, allowStreamingBody = false, overrideHost = null) {
   const init = {
     method: request.method,
-    headers: buildForwardedHeaders(request, upstream),
+    headers: buildForwardedHeaders(request, upstream, overrideHost),
     redirect: redirectMode
   };
 
@@ -153,8 +165,18 @@ async function handleMediaProxyRequest(request, env, orderedUpstreams) {
     throw new Error('No upstreams configured');
   }
 
-  const init = createProxyInit(request, upstream, null, 'follow', true);
-  const response = await fetchUpstream(request, upstream, init, 0);
+  // 计算优选 IP 改写，Host header 要保持原始域名
+  let overrideHost = null;
+  if (isPreferredIPEnabled(env)) {
+    const ip = pickPreferredIP(env);
+    if (ip) {
+      const { originalHost } = applyPreferredIP(createTargetUrl(request, upstream).toString(), ip);
+      overrideHost = originalHost;
+    }
+  }
+
+  const init = createProxyInit(request, upstream, null, 'follow', true, overrideHost);
+  const response = await fetchUpstream(request, upstream, init, 0, env);
 
   if (isWebSocketRequest(request)) {
     if (response.status === 101 && response.webSocket) {
@@ -175,8 +197,18 @@ async function handleApiProxyRequest(request, env, orderedUpstreams) {
 
   for (const upstream of attempts) {
     try {
-      const init = createProxyInit(request, upstream, bodyBuffer, 'follow');
-      const response = await fetchUpstream(request, upstream, init, timeoutMs);
+      // 计算优选 IP 改写
+      let overrideHost = null;
+      if (isPreferredIPEnabled(env)) {
+        const ip = pickPreferredIP(env);
+        if (ip) {
+          const { originalHost } = applyPreferredIP(createTargetUrl(request, upstream).toString(), ip);
+          overrideHost = originalHost;
+        }
+      }
+
+      const init = createProxyInit(request, upstream, bodyBuffer, 'follow', false, overrideHost);
+      const response = await fetchUpstream(request, upstream, init, timeoutMs, env);
 
       if (shouldRetry(response, null)) {
         errors.push({ upstream, status: response.status });

@@ -1,5 +1,5 @@
 # EMBY-CF - Cloudflare Worker Emby 反代加速
-# 文档：https://github.com/Xiuyixx/Nginx-CF
+# 文档：https://github.com/Xiuyixx/EMBY-CF
 #
 # 部署方式：Fork 本项目 → Cloudflare Workers / Pages 连接 GitHub → 直接部署
 # 部署完成后访问 https://你的Worker地址/_admin 通过网页向导完成 Emby 上游配置
@@ -13,6 +13,10 @@ compatibility_date = "2024-06-01"
 # 这里只放非敏感默认值。
 # UPSTREAMS / ADMIN_TOKEN 请部署后通过 /_admin 向导或 Dashboard Variables 填写。
 [vars]
+# PREFERRED_IP = ""   # 优选 IP / 优选代理（可选）
+                      # 格式：单个 IP、IP:port、代理域名，多个用英文逗号分隔
+                      # 示例：104.16.0.1,104.17.0.1 或 proxy.example.com
+                      # 详见 README 「优选 IP 使用说明」
 
 # ── Cron 触发器（健康检查）──
 # 每 5 分钟自动探测一次 Emby 上游健康状态
