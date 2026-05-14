@@ -130,8 +130,7 @@ export async function runHealthChecks(env) {
   const results = await Promise.all(
     upstreams.map(async (entry) => {
       const upstreamUrl = typeof entry === 'object' ? entry.url : entry;
-      const result = await checkUpstream(upstreamUrl, timeoutMs);
-      return { ...result, type: entry?.type === 'frontend' ? 'frontend' : 'backend' };
+      return checkUpstream(upstreamUrl, timeoutMs);
     })
   );
 
@@ -139,21 +138,16 @@ export async function runHealthChecks(env) {
   return results;
 }
 
-export async function chooseUpstreams(env, type = 'backend') {
+export async function chooseUpstreams(env) {
   const upstreams = await getUpstreams(env);
   const health = await getHealth(env);
   const healthMap = toHealthMap(health);
-  const wantedType = type === 'frontend' ? 'frontend' : 'backend';
-  const candidates = upstreams.filter((entry) => (entry?.type === 'frontend' ? 'frontend' : 'backend') === wantedType);
 
-  if (candidates.length === 0) {
-    if (wantedType === 'frontend') {
-      return chooseUpstreams(env, 'backend');
-    }
+  if (upstreams.length === 0) {
     throw new Error('No upstreams configured');
   }
 
-  const ranked = candidates
+  const ranked = upstreams
     .map((entry, index) => {
       const url = typeof entry === 'object' ? entry.url : entry;
       const item = healthMap.get(url);

@@ -17,16 +17,15 @@ function parseJson(text, fallback) {
   }
 }
 
-// 兼容旧格式（纯字符串）和新格式（{url, note, type} 对象）
+// 兼容旧格式（纯字符串）和新格式（{url, note} 对象）
 function normalizeUpstreams(list) {
   return (Array.isArray(list) ? list : [])
     .map((item) => {
       if (item && typeof item === 'object' && item.url) {
-        const type = item.type === 'frontend' ? 'frontend' : 'backend';
-        return { url: String(item.url).trim(), note: String(item.note || '').trim(), type };
+        return { url: String(item.url).trim(), note: String(item.note || '').trim() };
       }
       const url = String(item || '').trim();
-      return url ? { url, note: '', type: 'backend' } : null;
+      return url ? { url, note: '' } : null;
     })
     .filter(Boolean)
     .filter((item) => item.url);

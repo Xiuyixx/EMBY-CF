@@ -9,15 +9,15 @@ export function getAdminHTML() {
     :root{color-scheme:dark;--bg:#141414;--card:#1e1e1e;--border:#2a2a2a;--text:#f5f5f5;--muted:#9ca3af;--accent:#4f8cff;--accent-soft:rgba(79,140,255,.12);--success:#22c55e;--danger:#ef4444;--warning:#f59e0b;--shadow:0 18px 40px rgba(0,0,0,.28)}
     *{box-sizing:border-box}
     html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-    button,input,textarea,select{font:inherit}
+    button,input,textarea{font:inherit}
     button{border:1px solid var(--border);background:#252525;color:var(--text);border-radius:10px;padding:10px 14px;cursor:pointer;transition:.2s}
     button:hover{border-color:#3a3a3a;transform:translateY(-1px)}
     button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     button.danger{background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.2)}
     button.success{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.2)}
     button:disabled{opacity:.4;cursor:not-allowed;transform:none}
-    input,textarea,select{width:100%;border:1px solid var(--border);border-radius:10px;padding:11px 12px;background:#181818;color:var(--text);outline:none;resize:vertical}
-    input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+    input,textarea{width:100%;border:1px solid var(--border);border-radius:10px;padding:11px 12px;background:#181818;color:var(--text);outline:none;resize:vertical}
+    input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
     .hidden{display:none!important}
     .setup-shell{min-height:100vh;display:grid;place-items:center;padding:24px}
     .setup-card{width:min(100%,480px);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:32px}
@@ -93,7 +93,7 @@ export function getAdminHTML() {
     .muted{color:var(--muted)}
     .text-right{text-align:right}
     @media(max-width:900px){.layout{grid-template-columns:1fr;padding:16px}.sidebar-list{flex-direction:row;overflow:auto;max-height:none}.sidebar-item{min-width:200px}.settings-grid{grid-template-columns:1fr}}
-    @media(max-width:640px){.topbar{margin:12px 12px 0;padding:14px;border-radius:16px;align-items:flex-start}.topbar-right{flex-wrap:wrap;justify-content:flex-end}.layout{padding:12px;gap:12px}.main-panel{padding:16px}.toolbar-right{width:100%}.search-wrap{min-width:100%}.toolbar-right button{flex:1}.settings-actions{width:100%}.settings-actions button{flex:1}.table-wrap{overflow-x:auto}table{min-width:900px}}
+    @media(max-width:640px){.topbar{margin:12px 12px 0;padding:14px;border-radius:16px;align-items:flex-start}.topbar-right{flex-wrap:wrap;justify-content:flex-end}.layout{padding:12px;gap:12px}.main-panel{padding:16px}.toolbar-right{width:100%}.search-wrap{min-width:100%}.toolbar-right button{flex:1}.settings-actions{width:100%}.settings-actions button{flex:1}.table-wrap{overflow-x:auto}table{min-width:780px}}
   </style>
 </head>
 <body>
@@ -184,7 +184,7 @@ export function getAdminHTML() {
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>类型</th><th>URL</th><th>备注</th><th>状态</th><th>延迟</th><th>版本</th><th>检查方式</th><th>最后检查</th><th class="text-right">操作</th></tr></thead>
+          <thead><tr><th>URL</th><th>备注</th><th>状态</th><th>延迟</th><th>版本</th><th>检查方式</th><th>最后检查</th><th class="text-right">操作</th></tr></thead>
           <tbody id="tableBody"></tbody>
         </table>
         <div id="emptyState" class="empty-state hidden">暂无上游，点击「添加上游」开始配置。</div>
@@ -229,9 +229,8 @@ export function getAdminHTML() {
       <div class="modal-title" id="modalTitle">添加上游</div>
       <button onclick="closeModal()">✕</button>
     </div>
-    <div class="field"><label>上游类型</label><select id="modalType"><option value="backend">Emby 后端 / API / 媒体流</option><option value="frontend">Emby Web 前端 / 静态资源</option></select></div>
     <div class="field"><label>URL 地址</label><input id="modalUrl" type="url" placeholder="https://emby.example.com"/></div>
-    <div class="field"><label>备注（可选）</label><input id="modalNote" type="text" placeholder="例如：主站点 / 前端页面 / 香港节点"/></div>
+    <div class="field"><label>备注（可选）</label><input id="modalNote" type="text" placeholder="例如：主站点 / 家宽 / 香港节点"/></div>
     <div class="error-msg" id="modalErr"></div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button style="flex:1" onclick="closeModal()">取消</button>
@@ -418,11 +417,7 @@ function getHealthRecord(url) {
 
 function getEntry(i) {
   const e = allUpstreams[i];
-  return typeof e === 'object' ? { url: e.url, note: e.note || '', type: e.type === 'frontend' ? 'frontend' : 'backend' } : { url: e, note: '', type: 'backend' };
-}
-
-function getTypeLabel(type) {
-  return type === 'frontend' ? '前端' : '后端';
+  return typeof e === 'object' ? e : { url: e, note: '' };
 }
 
 function escapeHTML(value) {
@@ -458,21 +453,23 @@ function renderSidebar() {
   const list = document.getElementById('sidebarList');
   document.getElementById('sidebarCount').textContent = allUpstreams.length;
   list.innerHTML = allUpstreams.map((entry, i) => {
-    const { url, note, type } = getEntry(i);
+    const { url, note } = typeof entry === 'object' ? entry : { url: entry, note: '' };
     const record = getHealthRecord(url);
     const latency = record ? (record.latency >= 0 ? record.latency + 'ms' : '超时') : '未知';
     const label = note || url;
     return \`<div class="sidebar-item" onclick="highlightRow(\${i})">
       <div class="sidebar-item-row"><span class="dot \${record?.healthy ? 'healthy' : ''}"></span><span class="truncate" title="\${escapeHTML(url)}">\${escapeHTML(label)}</span></div>
-      <div class="sidebar-meta">\${escapeHTML(getTypeLabel(type))} · \${escapeHTML(getHealthSummary(record))} · \${escapeHTML(latency)}</div>
+      <div class="sidebar-meta">\${escapeHTML(getHealthSummary(record))} · \${escapeHTML(latency)}</div>
     </div>\`;
   }).join('');
 }
 
 function renderTable() {
   const q = (document.getElementById('searchInput').value || '').toLowerCase();
-  const filtered = allUpstreams.map((entry, i) => ({ ...getEntry(i), i }))
-    .filter(({ url, note, type }) => url.toLowerCase().includes(q) || note.toLowerCase().includes(q) || getTypeLabel(type).includes(q));
+  const filtered = allUpstreams.map((entry, i) => {
+    const { url, note } = typeof entry === 'object' ? entry : { url: entry, note: '' };
+    return { url, note, i };
+  }).filter(({ url, note }) => url.toLowerCase().includes(q) || note.toLowerCase().includes(q));
   const total = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   page = Math.min(page, total);
   const slice = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -481,7 +478,7 @@ function renderTable() {
   if (slice.length === 0) { tbody.innerHTML = ''; empty.classList.remove('hidden'); }
   else {
     empty.classList.add('hidden');
-    tbody.innerHTML = slice.map(({ url, note, type, i }) => {
+    tbody.innerHTML = slice.map(({ url, note, i }) => {
       const record = getHealthRecord(url);
       const healthy = record?.healthy;
       const latency = record ? (record.latency >= 0 ? record.latency + 'ms' : '超时') : '—';
@@ -490,7 +487,6 @@ function renderTable() {
       const version = record?.version || '—';
       const source = record?.source || '—';
       return \`<tr id="row-\${i}">
-        <td><span class="tag \${type === 'frontend' ? '' : 'ok'}">\${escapeHTML(getTypeLabel(type))}</span></td>
         <td class="truncate" style="max-width:220px" title="\${escapeHTML(url)}">\${escapeHTML(url)}</td>
         <td class="muted truncate" style="max-width:120px" title="\${escapeHTML(note)}">\${escapeHTML(note || '—')}</td>
         <td>\${badge || '<span class="muted">—</span>'}</td>
@@ -517,7 +513,6 @@ function changePage(d) { page += d; renderTable(); }
 function openAddModal() {
   editingIndex = -1;
   document.getElementById('modalTitle').textContent = '添加上游';
-  document.getElementById('modalType').value = 'backend';
   document.getElementById('modalUrl').value = '';
   document.getElementById('modalNote').value = '';
   document.getElementById('modalErr').textContent = '';
@@ -525,9 +520,8 @@ function openAddModal() {
 }
 function openEditModal(i) {
   editingIndex = i;
-  const { url, note, type } = getEntry(i);
+  const { url, note } = getEntry(i);
   document.getElementById('modalTitle').textContent = '编辑上游';
-  document.getElementById('modalType').value = type;
   document.getElementById('modalUrl').value = url;
   document.getElementById('modalNote').value = note || '';
   document.getElementById('modalErr').textContent = '';
@@ -536,14 +530,13 @@ function openEditModal(i) {
 function closeModal() { document.getElementById('modal').classList.add('hidden'); }
 
 async function submitModal() {
-  const type = document.getElementById('modalType').value === 'frontend' ? 'frontend' : 'backend';
   const url = document.getElementById('modalUrl').value.trim();
   const note = document.getElementById('modalNote').value.trim();
   const err = document.getElementById('modalErr');
   if (!isValidUpstreamUrl(url)) { err.textContent = '请输入有效的 URL（以 http:// 或 https:// 开头）'; return; }
-  let list = allUpstreams.map((_, i) => getEntry(i));
-  if (editingIndex >= 0) list[editingIndex] = { url, note, type };
-  else list.push({ url, note, type });
+  let list = allUpstreams.map(e => typeof e === 'object' ? e : { url: e, note: '' });
+  if (editingIndex >= 0) list[editingIndex] = { url, note };
+  else list.push({ url, note });
   err.textContent = '保存中…';
   const res = await authFetch('/_admin/upstreams', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ upstreams: list }) });
   if (!res) { err.textContent = '请求失败'; return; }
@@ -556,9 +549,9 @@ async function submitModal() {
 }
 
 async function removeUpstream(i) {
-  const { url, note, type } = getEntry(i);
-  if (!confirm(\`确定删除该上游？\n\${getTypeLabel(type)}  \${note ? note + '  ' : ''}\${url}\`)) return;
-  const list = allUpstreams.filter((_, idx) => idx !== i).map((entry) => typeof entry === 'object' ? entry : { url: entry, note: '', type: 'backend' });
+  const { url, note } = getEntry(i);
+  if (!confirm(\`确定删除该上游？\n\${note ? note + '  ' : ''}\${url}\`)) return;
+  const list = allUpstreams.filter((_, idx) => idx !== i);
   const res = await authFetch('/_admin/upstreams', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ upstreams: list }) });
   if (!res) return;
   const data = await res.json();
