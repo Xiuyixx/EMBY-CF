@@ -247,7 +247,7 @@ function goStep1() {
 }
 async function submitSetup(requireUpstreams) {
   const raw = document.getElementById('s1upstreams').value;
-  const upstreams = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  const upstreams = raw.split('\\n').map(s => s.trim()).filter(Boolean);
   const err = document.getElementById('s1err');
   if (requireUpstreams && upstreams.length === 0) { err.textContent = '请至少填写一个 Emby 上游地址'; return; }
   document.querySelectorAll('#step1 button').forEach(b => b.disabled = true);
