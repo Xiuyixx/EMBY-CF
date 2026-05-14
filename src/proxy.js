@@ -77,7 +77,7 @@ function shouldRetry(response, error) {
     return true;
   }
 
-  return response.status >= 500;
+  return Boolean(response) && response.status >= 500;
 }
 
 function getRequestTimeoutMs(env) {
@@ -103,7 +103,11 @@ function getPreferredIp(env) {
   return ips[Math.floor(Math.random() * ips.length)] || null;
 }
 
-async function proxyToUpstream(request, upstream, env) {
+function cloneRequestBody(bodyBuffer) {
+  return bodyBuffer ? bodyBuffer.slice(0) : undefined;
+}
+
+async function proxyToUpstream(request, upstream, env, bodyBuffer) {
   const originalUpstreamUrl = createTargetUrl(request, upstream);
   const preferredIp = getPreferredIp(env);
   const timeoutMs = getRequestTimeoutMs(env);
@@ -114,8 +118,8 @@ async function proxyToUpstream(request, upstream, env) {
     redirect: 'manual'
   };
 
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    directInit.body = request.body;
+  if (request.method !== 'GET' && request.method !== 'HEAD' && bodyBuffer) {
+    directInit.body = cloneRequestBody(bodyBuffer);
   }
 
   if (!preferredIp) {
@@ -129,8 +133,8 @@ async function proxyToUpstream(request, upstream, env) {
     redirect: 'manual'
   };
 
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    preferredInit.body = request.body;
+  if (request.method !== 'GET' && request.method !== 'HEAD' && bodyBuffer) {
+    preferredInit.body = cloneRequestBody(bodyBuffer);
   }
 
   try {
@@ -145,10 +149,11 @@ export async function handleProxyRequest(request, env) {
   const orderedUpstreams = await chooseUpstreams(env);
   const attempts = orderedUpstreams.slice(0, MAX_RETRIES);
   const errors = [];
+  const bodyBuffer = request.method !== 'GET' && request.method !== 'HEAD' ? await request.arrayBuffer() : null;
 
   for (const upstream of attempts) {
     try {
-      const response = await proxyToUpstream(request, upstream, env);
+      const response = await proxyToUpstream(request, upstream, env, bodyBuffer);
 
       if (shouldRetry(response, null)) {
         errors.push({ upstream, status: response.status });

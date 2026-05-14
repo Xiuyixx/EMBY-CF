@@ -66,7 +66,7 @@ export async function runHealthChecks(env) {
         const healthUrl = buildHealthUrl(upstreamUrl, env);
         const response = await fetchHealth(healthUrl, timeoutMs);
         const latency = Date.now() - startedAt;
-        const healthy = response.ok || (response.status >= 300 && response.status < 500);
+        const healthy = response.ok;
 
         return {
           url: upstreamUrl,

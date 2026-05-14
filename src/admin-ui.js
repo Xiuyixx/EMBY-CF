@@ -322,7 +322,7 @@ async function applyStatus(data) {
   allUpstreams = data.upstreams || [];
   allHealth = data.health || [];
   const kvTag = document.getElementById('kvTag');
-  if (data.hasKV) { kvTag.textContent = 'KV ✓'; kvTag.className = 'tag ok'; }
+  if (Boolean(data.hasKV)) { kvTag.textContent = 'KV ✓'; kvTag.className = 'tag ok'; }
   else { kvTag.textContent = '⚠️ 内存模式（重启丢失）'; kvTag.className = 'tag warn'; }
   document.getElementById('timeTag').textContent = new Date(data.now || Date.now()).toLocaleTimeString('zh-CN');
   document.getElementById('nowLabel').textContent = '当前时间 ' + new Date().toLocaleString('zh-CN');
@@ -353,6 +353,24 @@ function getEntry(i) {
   return typeof e === 'object' ? e : { url: e, note: '' };
 }
 
+function escapeHTML(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function isValidUpstreamUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function renderSidebar() {
   const list = document.getElementById('sidebarList');
   document.getElementById('sidebarCount').textContent = allUpstreams.length;
@@ -363,8 +381,8 @@ function renderSidebar() {
     const latency = h ? (h.latency >= 0 ? h.latency + 'ms' : '超时') : '未知';
     const label = note || url;
     return \`<div class="sidebar-item" onclick="highlightRow(\${i})">
-      <div class="sidebar-item-row"><span class="dot \${healthy ? 'healthy' : ''}"></span><span class="truncate" title="\${url}">\${label}</span></div>
-      <div class="sidebar-meta">\${healthy === undefined ? '暂无数据' : (healthy ? '健康' : '不健康')} · \${latency}</div>
+      <div class="sidebar-item-row"><span class="dot \${healthy ? 'healthy' : ''}"></span><span class="truncate" title="\${escapeHTML(url)}">\${escapeHTML(label)}</span></div>
+      <div class="sidebar-meta">\${healthy === undefined ? '暂无数据' : (healthy ? '健康' : '不健康')} · \${escapeHTML(latency)}</div>
     </div>\`;
   }).join('');
 }
@@ -390,11 +408,11 @@ function renderTable() {
       const lastCheck = h?.lastCheck ? new Date(h.lastCheck).toLocaleString('zh-CN') : '—';
       const badge = healthy === undefined ? '' : \`<span class="badge \${healthy ? 'healthy' : 'unhealthy'}">\${healthy ? '✓ 健康' : '✗ 不健康'}</span>\`;
       return \`<tr id="row-\${i}">
-        <td class="truncate" style="max-width:200px" title="\${url}">\${url}</td>
-        <td class="muted truncate" style="max-width:100px" title="\${note}">\${note || '—'}</td>
+        <td class="truncate" style="max-width:200px" title="\${escapeHTML(url)}">\${escapeHTML(url)}</td>
+        <td class="muted truncate" style="max-width:100px" title="\${escapeHTML(note)}">\${escapeHTML(note || '—')}</td>
         <td>\${badge || '<span class="muted">—</span>'}</td>
-        <td>\${latency}</td>
-        <td>\${lastCheck}</td>
+        <td>\${escapeHTML(latency)}</td>
+        <td>\${escapeHTML(lastCheck)}</td>
         <td class="text-right" style="white-space:nowrap"><button onclick="openEditModal(\${i})">编辑</button> <button class="danger" onclick="removeUpstream(\${i})">删除</button></td>
       </tr>\`;
     }).join('');
@@ -435,7 +453,7 @@ async function submitModal() {
   const url = document.getElementById('modalUrl').value.trim();
   const note = document.getElementById('modalNote').value.trim();
   const err = document.getElementById('modalErr');
-  if (!url || !url.startsWith('http')) { err.textContent = '请输入有效的 URL（以 http:// 或 https:// 开头）'; return; }
+  if (!isValidUpstreamUrl(url)) { err.textContent = '请输入有效的 URL（以 http:// 或 https:// 开头）'; return; }
   let list = allUpstreams.map(e => typeof e === 'object' ? e : { url: e, note: '' });
   if (editingIndex >= 0) list[editingIndex] = { url, note };
   else list.push({ url, note });
@@ -457,6 +475,7 @@ async function removeUpstream(i) {
   const res = await authFetch('/_admin/upstreams', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ upstreams: list }) });
   if (!res) return;
   const data = await res.json();
+  if (!res.ok) { alert(data.error || '删除失败'); return; }
   allUpstreams = data.upstreams || list;
   renderSidebar();
   renderTable();

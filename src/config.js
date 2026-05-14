@@ -43,7 +43,7 @@ function getMemoryState(env) {
   return env.__MEMORY_STATE__;
 }
 
-function hasKV(env) {
+export function hasKV(env) {
   return Boolean(env?.KV && typeof env.KV.get === 'function' && typeof env.KV.put === 'function');
 }
 
@@ -54,15 +54,14 @@ function readEnvUpstreams(env) {
 export async function getUpstreams(env) {
   if (hasKV(env)) {
     const kvText = await env.KV.get(UPSTREAMS_KEY);
-    const kvList = normalizeUpstreams(parseJson(kvText, []));
 
-    if (kvList.length > 0) {
-      return kvList;
+    if (kvText !== null) {
+      return normalizeUpstreams(parseJson(kvText, []));
     }
   }
 
   const memory = getMemoryState(env);
-  if (Array.isArray(memory.upstreams) && memory.upstreams.length > 0) {
+  if (Array.isArray(memory.upstreams)) {
     return memory.upstreams;
   }
 

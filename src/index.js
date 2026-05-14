@@ -4,6 +4,7 @@ import {
   getHealth,
   getStoredAdminToken,
   getUpstreams,
+  hasKV,
   isSetupDone,
   setUpstreams
 } from './config.js';
@@ -59,6 +60,17 @@ async function isAuthorized(request, env) {
   return timingSafeEqual(incomingToken, configuredToken);
 }
 
+function isValidUpstreamEntry(entry) {
+  const value = typeof entry === 'object' ? entry?.url : entry;
+
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function checkStartupSecurity(env) {
   if (startupChecked) {
     return;
@@ -66,7 +78,7 @@ function checkStartupSecurity(env) {
 
   startupChecked = true;
 
-  if (!env.KV) {
+  if (!hasKV(env)) {
     console.warn('[WARN] KV is not configured. Setup wizard and persistent state will not work.');
   }
 }
@@ -85,7 +97,7 @@ async function handleAdmin(request, env) {
   if (request.method === 'GET' && url.pathname === '/_admin/setup-status') {
     const setupDone = await isSetupDone(env);
     const hasEnvToken = Boolean(String(env.ADMIN_TOKEN || '').trim());
-    return json({ setupDone, hasEnvToken });
+    return json({ setupDone, hasEnvToken, hasKV: hasKV(env) });
   }
 
   if (request.method === 'POST' && url.pathname === '/_admin/setup') {
@@ -103,18 +115,27 @@ async function handleAdmin(request, env) {
     }
 
     const token = String(payload?.token || '').trim();
+    const upstreams = payload?.upstreams;
     if (token.length < 8) {
       return json({ error: 'Token must be at least 8 characters' }, 400);
     }
 
+    if (!Array.isArray(upstreams) || upstreams.length === 0) {
+      return json({ error: 'Body must include a non-empty upstreams array' }, 400);
+    }
+
+    if (!upstreams.every(isValidUpstreamEntry)) {
+      return json({ error: 'All upstream URLs must use http:// or https://' }, 400);
+    }
+
     try {
       await completeSetup(env, token);
-      if (upstreams.length > 0) await setUpstreams(env, upstreams);
+      await setUpstreams(env, upstreams);
     } catch (error) {
       return json({ error: error.message }, 400);
     }
 
-    return json({ ok: true, memoryMode: !env.KV, setupDone: true });
+    return json({ ok: true, memoryMode: !hasKV(env), setupDone: true });
   }
 
   if (!(await isAuthorized(request, env))) {
@@ -123,7 +144,7 @@ async function handleAdmin(request, env) {
 
   if (request.method === 'GET' && url.pathname === '/_admin/status') {
     const [upstreams, health] = await Promise.all([getUpstreams(env), getHealth(env)]);
-    return json({ upstreams, health, now: new Date().toISOString() });
+    return json({ upstreams, health, hasKV: hasKV(env), now: new Date().toISOString() });
   }
 
   if (request.method === 'POST' && url.pathname === '/_admin/trigger-health') {
@@ -140,15 +161,13 @@ async function handleAdmin(request, env) {
       return json({ error: 'Invalid JSON body' }, 400);
     }
 
-    if (!Array.isArray(payload?.upstreams) || payload.upstreams.length === 0) {
-      return json({ error: 'Body must include a non-empty upstreams array' }, 400);
+    if (!Array.isArray(payload?.upstreams)) {
+      return json({ error: 'Body must include an upstreams array' }, 400);
     }
     // 兼容纯 URL 字符串和 {url, note} 对象两种格式
-    const hasValid = payload.upstreams.some(u => {
-      const url = typeof u === 'object' ? u?.url : u;
-      return url && String(url).startsWith('http');
-    });
-    if (!hasValid) return json({ error: 'At least one valid upstream URL (http/https) is required' }, 400);
+    if (!payload.upstreams.every(isValidUpstreamEntry)) {
+      return json({ error: 'All upstream URLs must use http:// or https://' }, 400);
+    }
 
     await setUpstreams(env, payload.upstreams);
     const upstreams = await getUpstreams(env);
