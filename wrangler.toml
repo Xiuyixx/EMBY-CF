@@ -7,8 +7,11 @@ binding = "KV"
 id = "YOUR_KV_NAMESPACE_ID"
 
 [vars]
-UPSTREAMS = "https://example.com"
-ADMIN_TOKEN = "change-me"
+# ⚠️  UPSTREAMS 和 ADMIN_TOKEN 请勿直接写在这里（公开仓库会泄露）
+# 请在 Cloudflare Dashboard → Worker → Settings → Variables 中单独添加这两项
+# 参考值格式（仅供参考，请在控制台填写真实值）：
+#   UPSTREAMS      = "https://a.example.com,https://b.example.com"
+#   ADMIN_TOKEN    = "your-random-secret-token"
 USE_CF_IPS = "false"
 PREFERRED_REGION = "apac"
 
