@@ -1,0 +1,13 @@
+{
+  "name": "nginx-cf",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --input-type=module -e \"import('./src/index.js').then(() => console.log('ok'))\"",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.57.2"
+  }
+}

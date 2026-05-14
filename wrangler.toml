@@ -1,0 +1,16 @@
+name = "nginx-cf"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+[vars]
+UPSTREAMS = "https://example.com"
+ADMIN_TOKEN = "change-me"
+USE_CF_IPS = "false"
+PREFERRED_REGION = "apac"
+
+[[triggers.crons]]
+cron = "*/5 * * * *"
