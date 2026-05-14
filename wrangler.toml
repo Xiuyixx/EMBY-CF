@@ -5,13 +5,17 @@ name = "nginx-cf"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-# ── Workers KV ──
+# ── Workers KV（可选）──
 # 用于持久化存储上游列表、健康状态和管理员密码
-# 部署后在 Cloudflare Dashboard → Workers KV 创建命名空间，将 id 填入下方
-# 如不配置 KV，Worker 会以内存模式运行（重启后数据丢失），但仍可正常使用
-[[kv_namespaces]]
-binding = "KV"
-id = "YOUR_KV_NAMESPACE_ID"   # ← 替换为你的 KV namespace ID
+# 不配置 KV 时，Worker 以内存模式运行（重启后数据丢失），功能仍完整可用
+#
+# 如需启用 KV：
+#   1. 在 Cloudflare Dashboard → Workers & Pages → KV 创建命名空间
+#   2. 取消下面三行的注释，并将 YOUR_KV_NAMESPACE_ID 替换为真实 ID
+#
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "YOUR_KV_NAMESPACE_ID"
 
 # ── 环境变量 ──
 # ⚠️ 安全提示：UPSTREAMS 和 ADMIN_TOKEN 请通过 Cloudflare 控制台的
